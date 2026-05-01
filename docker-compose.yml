@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13-alpine
+    container_name: dsdeliver-postgres
+    environment:
+      POSTGRES_DB: dsdeliver
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: dsdeliver-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dsdeliver
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # Recria as tabelas e re-executa o data.sql a cada inicialização.
+      # Troque por 'update' para preservar os dados entre reinicializações.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create
+      SPRING_DATASOURCE_INITIALIZATION_MODE: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  front-web:
+    build:
+      context: ./front-web
+      args:
+        REACT_APP_API_URL: http://localhost:8080
+        REACT_APP_ACCESS_TOKEN_MAP_BOX: ${REACT_APP_ACCESS_TOKEN_MAP_BOX}
+    container_name: dsdeliver-front-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  front-mobile:
+    build:
+      context: ./front-mobile
+      args:
+        REACT_APP_API_URL: http://localhost:8080
+    container_name: dsdeliver-front-mobile
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
